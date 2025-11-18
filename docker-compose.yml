@@ -1,0 +1,245 @@
+# feedlyai team docker-compose.yml
+services:
+  # ---------- ye: 이미지 생성/분석 ----------
+  # app-ye:
+  #   build: ./services/app-ye
+  #   container_name: app-ye
+  #   ports:
+  #     - "${PORT_YE}:8000"
+  #   environment:
+  #     - ASSETS_DIR=/assets
+  #   volumes:
+  #     - "${YE_CODE_DIR}:/app" # ← ye 코드 바인드
+  #     - "${ASSETS_DIR}:/assets" # ← 공용 에셋 바인드
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+  #   restart: unless-stopped
+
+  # ---------- yh: YOLO/Planner/Overlay/Eval/Judge ----------
+  # app-yh:
+  #   build: ./services/app-yh
+  #   container_name: app-yh
+  #   ports:
+  #     - "${PORT_YH}:8000"
+  #   environment:
+  #     - ASSETS_DIR=/assets
+  #   volumes:
+  #     - "${YH_CODE_DIR}:/app" # ← yh 코드 바인드
+  #     - "${ASSETS_DIR}:/assets" # ← 공용 에셋 바인드
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+  #   restart: unless-stopped
+
+  # ---------- js: FE/BFF & 업로드/Job 제출 ----------
+  # app-js:
+  #   build: ./services/app-js
+  #   container_name: app-js
+  #   ports:
+  #     - "${PORT_JS}:8000"
+  #   environment:
+  #     - ASSETS_DIR=/assets
+  #   volumes:
+  #     - "${JS_CODE_DIR}:/app" # ← js 코드 바인드
+  #     - "${ASSETS_DIR}:/assets" # ← 공용 에셋 바인드
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+  #   restart: unless-stopped
+
+  # ---------- sh: 이미지 향상/배경 제거 ----------
+  # app-sh:
+  #   build: ./services/app-sh
+  #   container_name: app-sh
+  #   ports:
+  #     - "${PORT_SH}:8000"
+  #   environment:
+  #     - ASSETS_DIR=/assets
+  #   volumes:
+  #     - "${SH_CODE_DIR}:/app" # ← sh 코드 바인드
+  #     - "${ASSETS_DIR}:/assets" # ← 공용 에셋 바인드
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+  #   restart: unless-stopped
+
+  # ---------- PostgreSQL Database ----------
+  # 공용 PostgreSQL (기본 포트 5432)
+  postgres:
+    image: postgres:16-alpine
+    container_name: feedlyai-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-feedlyai}
+      POSTGRES_USER: ${DB_USER:-feedlyai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-feedlyai_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-feedlyai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- 팀원별 PostgreSQL (개별 포트) ----------
+  # ye: 이미지 생성/분석
+  postgres-ye:
+    image: postgres:16-alpine
+    container_name: feedlyai-postgres-ye
+    environment:
+      POSTGRES_DB: ${DB_NAME:-feedlyai}
+      POSTGRES_USER: ${DB_USER:-feedlyai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-feedlyai_password}
+    volumes:
+      - postgres_data_ye:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5434:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-feedlyai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # yh: YOLO/Planner/Overlay/Eval/Judge
+  postgres-yh:
+    image: postgres:16-alpine
+    container_name: feedlyai-postgres-yh
+    environment:
+      POSTGRES_DB: ${DB_NAME:-feedlyai}
+      POSTGRES_USER: ${DB_USER:-feedlyai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-feedlyai_password}
+    volumes:
+      - postgres_data_yh:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5435:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-feedlyai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # js: FE/BFF & 업로드/Job 제출
+  postgres-js:
+    image: postgres:16-alpine
+    container_name: feedlyai-postgres-js
+    environment:
+      POSTGRES_DB: ${DB_NAME:-feedlyai}
+      POSTGRES_USER: ${DB_USER:-feedlyai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-feedlyai_password}
+    volumes:
+      - postgres_data_js:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5436:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-feedlyai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # sh: 이미지 향상/배경 제거
+  postgres-sh:
+    image: postgres:16-alpine
+    container_name: feedlyai-postgres-sh
+    environment:
+      POSTGRES_DB: ${DB_NAME:-feedlyai}
+      POSTGRES_USER: ${DB_USER:-feedlyai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-feedlyai_password}
+    volumes:
+      - postgres_data_sh:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5437:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-feedlyai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- Nginx(정적 에셋 프록시) ----------
+  nginx:
+    image: nginx:alpine
+    container_name: feedlyai-nginx
+    depends_on:
+      # - app-ye
+      # - app-yh
+      # - app-js
+      # - app-sh
+      - postgres
+    ports:
+      - "${PORT_NGINX}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - "${ASSETS_DIR}:/usr/share/nginx/html/assets:rw" # 공용 에셋 정적 서빙
+    restart: unless-stopped
+
+  # ---------- Adminer (DB 관리 도구) ----------
+  # 공용 Adminer (기본 포트 8081)
+  adminer:
+    image: adminer:latest
+    container_name: feedlyai-adminer
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ---------- 팀원별 Adminer (개별 포트) ----------
+  # ye: 이미지 생성/분석
+  adminer-ye:
+    image: adminer:latest
+    container_name: feedlyai-adminer-ye
+    ports:
+      - "8083:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # yh: YOLO/Planner/Overlay/Eval/Judge
+  adminer-yh:
+    image: adminer:latest
+    container_name: feedlyai-adminer-yh
+    ports:
+      - "8084:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # js: FE/BFF & 업로드/Job 제출
+  adminer-js:
+    image: adminer:latest
+    container_name: feedlyai-adminer-js
+    ports:
+      - "8085:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # sh: 이미지 향상/배경 제거
+  adminer-sh:
+    image: adminer:latest
+    container_name: feedlyai-adminer-sh
+    ports:
+      - "8086:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  postgres_data_ye:
+  postgres_data_yh:
+  postgres_data_js:
+  postgres_data_sh:

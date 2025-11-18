@@ -1,0 +1,3 @@
+[submodule "services/app-yh"]
+	path = services/app-yh
+	url = git@github.com:sprint-team2-sBiz-AdGen/repo-app-yh.git
