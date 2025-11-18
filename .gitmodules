@@ -1,3 +1,12 @@
 [submodule "services/app-yh"]
 	path = services/app-yh
 	url = git@github.com:sprint-team2-sBiz-AdGen/repo-app-yh.git
+[submodule "services/app-ye"]
+	path = services/app-ye
+	url = git@github.com:sprint-team2-sBiz-AdGen/repo-app-ye.git
+[submodule "services/app-sh"]
+	path = services/app-sh
+	url = git@github.com:sprint-team2-sBiz-AdGen/repo-app-sh.git
+[submodule "services/app-js"]
+	path = services/app-js
+	url = git@github.com:sprint-team2-sBiz-AdGen/repo-app-js.git
