@@ -1,0 +1,16 @@
+# 데이터베이스 타겟 설정
+# 이 파일은 Service Discovery를 위한 참고용입니다.
+# 실제 타겟은 prometheus.yml의 scrape_configs에 정의되어 있습니다.
+
+# PostgreSQL 인스턴스:
+# - postgres (공용): 5432
+# - postgres-ye: 5434
+# - postgres-yh: 5435
+# - postgres-js: 5436
+# - postgres-sh: 5437
+
+# 현재는 postgres-exporter가 공용 postgres만 모니터링합니다.
+# 추가 DB 인스턴스를 모니터링하려면:
+# 1. 별도의 postgres-exporter 인스턴스 추가
+# 2. 또는 postgres-exporter의 multi-database 설정 사용
+

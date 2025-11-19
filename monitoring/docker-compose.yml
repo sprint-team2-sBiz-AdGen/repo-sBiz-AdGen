@@ -1,0 +1,106 @@
+# FeedlyAI 모니터링 스택
+# Prometheus + Grafana + Exporters
+
+version: '3.8'
+
+services:
+  # ---------- Prometheus (메트릭 수집 및 저장) ----------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: feedlyai-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./prometheus/targets:/etc/prometheus/targets:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - feedlyai_default
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------- Grafana (시각화 대시보드) ----------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: feedlyai-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=
+    restart: unless-stopped
+    networks:
+      - feedlyai_default
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------- Node Exporter (시스템 메트릭) ----------
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: feedlyai-node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    networks:
+      - feedlyai_default
+
+  # ---------- PostgreSQL Exporter (DB 메트릭) ----------
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: feedlyai-postgres-exporter
+    ports:
+      - "9187:9187"
+    environment:
+      # 공용 PostgreSQL (비밀번호: feedlyai)
+      - DATA_SOURCE_NAME=postgresql://feedlyai:feedlyai@postgres:5432/feedlyai?sslmode=disable
+      # 추가 DB 인스턴스는 별도 exporter로 구성하거나, 여러 연결을 지원하는 설정 사용
+    restart: unless-stopped
+    networks:
+      - feedlyai_default
+    # 주의: postgres 서비스는 기존 docker-compose.yml에 있으므로 
+    # 같은 네트워크(feedlyai_default)를 통해 접근 가능
+    # depends_on은 external 서비스에는 작동하지 않으므로 제거
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  feedlyai_default:
+    external: true
+    name: feedlyai_default
+

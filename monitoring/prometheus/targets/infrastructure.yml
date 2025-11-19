@@ -1,0 +1,12 @@
+# 인프라 타겟 설정
+# 이 파일은 Service Discovery를 위한 참고용입니다.
+# 실제 타겟은 prometheus.yml의 scrape_configs에 정의되어 있습니다.
+
+# Node Exporter: 시스템 메트릭
+# - Target: node-exporter:9100
+# - Metrics: CPU, Memory, Disk, Network
+
+# Nginx Exporter (선택사항):
+# - Target: nginx-exporter:9113
+# - Requirements: Nginx에 stub_status 모듈 활성화 필요
+

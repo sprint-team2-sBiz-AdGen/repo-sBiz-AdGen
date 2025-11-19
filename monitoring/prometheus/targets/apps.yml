@@ -1,0 +1,20 @@
+# 애플리케이션 서비스 타겟 설정
+# 이 파일은 Service Discovery를 위한 참고용입니다.
+# 실제 타겟은 prometheus.yml의 scrape_configs에 정의되어 있습니다.
+
+# app-ye: 이미지 생성/분석
+# - Target: app-ye:8000/metrics
+# - Labels: service=app-ye, part=ye
+
+# app-yh: YOLO/Planner/Overlay/Eval/Judge
+# - Target: app-yh:8000/metrics
+# - Labels: service=app-yh, part=yh
+
+# app-js: FE/BFF & 업로드/Job 제출
+# - Target: app-js:8000/metrics
+# - Labels: service=app-js, part=js
+
+# app-sh: 이미지 향상/배경 제거
+# - Target: app-sh:8000/metrics
+# - Labels: service=app-sh, part=sh
+

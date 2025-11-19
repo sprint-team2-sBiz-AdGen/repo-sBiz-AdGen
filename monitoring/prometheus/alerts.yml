@@ -1,0 +1,137 @@
+# Prometheus 알림 규칙
+
+groups:
+  # ---------- 서비스 알림 ----------
+  - name: service_alerts
+    interval: 30s
+    rules:
+      # 서비스 다운
+      - alert: ServiceDown
+        expr: up{job=~"app-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "서비스 다운"
+          description: "{{ $labels.job }} 서비스가 다운되었습니다. (인스턴스: {{ $labels.instance }})"
+
+      # 높은 에러율 (5xx)
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5..",job=~"app-.*"}[5m])) by (job)
+            /
+            sum(rate(http_requests_total{job=~"app-.*"}[5m])) by (job)
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "높은 에러율 감지"
+          description: "{{ $labels.job }}의 5xx 에러율이 1%를 초과했습니다. (현재: {{ $value | humanizePercentage }})"
+
+      # 높은 응답 시간 (P95 > 2초)
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{job=~"app-.*"}[5m])) by (le, job)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "높은 응답 시간"
+          description: "{{ $labels.job }}의 P95 응답 시간이 2초를 초과했습니다. (현재: {{ $value }}초)"
+
+      # 높은 4xx 에러율
+      - alert: HighClientErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"4..",job=~"app-.*"}[5m])) by (job)
+            /
+            sum(rate(http_requests_total{job=~"app-.*"}[5m])) by (job)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "높은 클라이언트 에러율"
+          description: "{{ $labels.job }}의 4xx 에러율이 5%를 초과했습니다. (현재: {{ $value | humanizePercentage }})"
+
+  # ---------- 데이터베이스 알림 ----------
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # DB 연결 수 부족
+      - alert: DatabaseConnectionHigh
+        expr: |
+          (
+            pg_stat_database_numbackends{datname="feedlyai"}
+            /
+            pg_settings_max_connections{setting="max_connections"}
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "높은 데이터베이스 연결 수"
+          description: "데이터베이스 연결 수가 최대 연결의 80%를 초과했습니다. (현재: {{ $value | humanizePercentage }})"
+
+      # DB 다운
+      - alert: DatabaseDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "데이터베이스 다운"
+          description: "PostgreSQL Exporter가 응답하지 않습니다."
+
+  # ---------- 인프라 알림 ----------
+  - name: infrastructure_alerts
+    interval: 30s
+    rules:
+      # 높은 CPU 사용량
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "높은 CPU 사용량"
+          description: "CPU 사용률이 80%를 초과했습니다. (현재: {{ $value }}%)"
+
+      # 높은 메모리 사용량
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "높은 메모리 사용량"
+          description: "메모리 사용률이 90%를 초과했습니다. (현재: {{ $value }}%)"
+
+      # 디스크 공간 부족
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "디스크 공간 부족"
+          description: "디스크 사용 가능 공간이 15% 미만입니다. (현재: {{ $value }}%)"
+
+      # 디스크 I/O 높음
+      - alert: HighDiskIO
+        expr: |
+          rate(node_disk_io_time_seconds_total[5m]) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "높은 디스크 I/O"
+          description: "디스크 I/O 사용률이 90%를 초과했습니다."
+
