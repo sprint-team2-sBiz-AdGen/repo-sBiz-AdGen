@@ -1,7 +1,7 @@
 -- FeedlyAI Database Schema
--- Version: 0.7
+-- Version: 0.8
 -- Created: 2025-11-16
--- Updated: 2025-11-24
+-- Updated: 2025-11-25
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -48,13 +48,14 @@ CREATE TABLE IF NOT EXISTS image_assets (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- STORIES 테이블
-CREATE TABLE IF NOT EXISTS stories (
-    story_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- STORES 테이블
+CREATE TABLE IF NOT EXISTS stores (
+    store_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(user_id),
     image_id UUID REFERENCES image_assets(image_asset_id),
     title VARCHAR(500),
     body TEXT,
+    store_category TEXT,
     auto_scoring_flag BOOLEAN DEFAULT FALSE,
     uid VARCHAR(255) UNIQUE,
     pk SERIAL,
@@ -285,22 +286,13 @@ CREATE TABLE IF NOT EXISTS renders (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- EVALS 테이블
-CREATE TABLE IF NOT EXISTS evals (
-    eval_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    render_id UUID REFERENCES renders(render_id),
-    score JSONB,  -- 다양한 평가 점수들
-    uid VARCHAR(255) UNIQUE,
-    pk SERIAL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- JUDGE_RESULTS 테이블
-CREATE TABLE IF NOT EXISTS judge_results (
-    judge_result_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    eval_id UUID REFERENCES evals(eval_id),
-    issue JSONB,  -- 이슈 정보
+-- EVALUATIONS 테이블 (평가 결과 저장)
+CREATE TABLE IF NOT EXISTS evaluations (
+    evaluation_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_id UUID REFERENCES jobs(job_id),  -- FK
+    overlay_id UUID REFERENCES overlay_layouts(overlay_id),  -- FK
+    evaluation_type VARCHAR(50) NOT NULL,  -- 'llava_judge', 'ocr', 'readability', 'iou'
+    metrics JSONB NOT NULL,  -- 평가 메트릭 (타입별로 다른 구조)
     uid VARCHAR(255) UNIQUE,
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -362,8 +354,8 @@ CREATE TABLE IF NOT EXISTS connected_nodes (
 -- Foreign Key 인덱스
 CREATE INDEX IF NOT EXISTS idx_image_assets_creator_id ON image_assets(creator_id);
 CREATE INDEX IF NOT EXISTS idx_image_assets_tenant_id ON image_assets(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_stories_user_id ON stories(user_id);
-CREATE INDEX IF NOT EXISTS idx_stories_image_id ON stories(image_id);
+CREATE INDEX IF NOT EXISTS idx_stores_user_id ON stores(user_id);
+CREATE INDEX IF NOT EXISTS idx_stores_image_id ON stores(image_id);
 CREATE INDEX IF NOT EXISTS idx_gen_runs_tenant_id ON gen_runs(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_gen_runs_model_id ON gen_runs(model_id);
 CREATE INDEX IF NOT EXISTS idx_gen_runs_src_asset_id ON gen_runs(src_asset_id);
@@ -382,8 +374,9 @@ CREATE INDEX IF NOT EXISTS idx_yolo_runs_image_asset_id ON yolo_runs(image_asset
 CREATE INDEX IF NOT EXISTS idx_planner_proposals_image_id ON planner_proposals(image_asset_id);
 CREATE INDEX IF NOT EXISTS idx_overlay_layouts_proposal_id ON overlay_layouts(proposal_id);
 CREATE INDEX IF NOT EXISTS idx_renders_overlay_id ON renders(overlay_id);
-CREATE INDEX IF NOT EXISTS idx_evals_render_id ON evals(render_id);
-CREATE INDEX IF NOT EXISTS idx_judge_results_eval_id ON judge_results(eval_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_job_id ON evaluations(job_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_overlay_id ON evaluations(overlay_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_type ON evaluations(evaluation_type);
 CREATE INDEX IF NOT EXISTS idx_pbg_prompt_assets_tone_style_id ON pbg_prompt_assets(tone_style_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_prompt_assets_prompt_type ON vlm_prompt_assets(prompt_type);
 CREATE INDEX IF NOT EXISTS idx_pbg_placement_presets_prompt_type ON pbg_placement_presets(prompt_type);
@@ -409,18 +402,19 @@ CREATE INDEX IF NOT EXISTS idx_llm_traces_operation_type ON llm_traces(operation
 
 -- 시간 기반 인덱스 (조회 성능 향상)
 CREATE INDEX IF NOT EXISTS idx_image_assets_created_at ON image_assets(created_at);
-CREATE INDEX IF NOT EXISTS idx_stories_created_at ON stories(created_at);
+CREATE INDEX IF NOT EXISTS idx_stores_created_at ON stores(created_at);
 CREATE INDEX IF NOT EXISTS idx_gen_runs_created_at ON gen_runs(created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
 CREATE INDEX IF NOT EXISTS idx_job_inputs_created_at ON job_inputs(created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_created_at ON jobs_variants(created_at);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_created_at ON vlm_traces(created_at);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_created_at ON llm_traces(created_at);
+CREATE INDEX IF NOT EXISTS idx_evaluations_created_at ON evaluations(created_at);
 
 -- JSONB 인덱스 (GIN 인덱스)
 CREATE INDEX IF NOT EXISTS idx_detections_box ON detections USING GIN (box);
 CREATE INDEX IF NOT EXISTS idx_planner_proposals_layout ON planner_proposals USING GIN (layout);
-CREATE INDEX IF NOT EXISTS idx_evals_score ON evals USING GIN (score);
+CREATE INDEX IF NOT EXISTS idx_evaluations_metrics ON evaluations USING GIN (metrics);
 CREATE INDEX IF NOT EXISTS idx_pbg_prompt_assets_prompt ON pbg_prompt_assets USING GIN (prompt);
 CREATE INDEX IF NOT EXISTS idx_pbg_prompt_assets_negative_prompt ON pbg_prompt_assets USING GIN (negative_prompt);
 CREATE INDEX IF NOT EXISTS idx_vlm_prompt_assets_prompt ON vlm_prompt_assets USING GIN (prompt);
