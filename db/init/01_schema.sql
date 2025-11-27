@@ -243,6 +243,7 @@ CREATE TABLE IF NOT EXISTS yolo_runs (
     forbidden_mask_url TEXT,
     model_name VARCHAR(255),
     detection_count INTEGER DEFAULT 0,
+    latency_ms FLOAT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -253,6 +254,7 @@ CREATE TABLE IF NOT EXISTS planner_proposals (
     image_asset_id UUID REFERENCES image_assets(image_asset_id),
     prompt TEXT,
     layout JSONB,  -- 레이아웃 정보
+    latency_ms FLOAT,
     uid VARCHAR(255) UNIQUE,
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -269,6 +271,7 @@ CREATE TABLE IF NOT EXISTS overlay_layouts (
     width_ratio DECIMAL(5,4),
     height_ratio DECIMAL(5,4),
     text_margin VARCHAR(50),
+    latency_ms FLOAT,
     uid VARCHAR(255) UNIQUE,
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
