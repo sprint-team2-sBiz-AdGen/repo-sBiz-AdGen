@@ -73,6 +73,7 @@ DECLARE
     job_status TEXT;
     job_current_step TEXT;
     all_same_step_done BOOLEAN;  -- 모든 variants가 같은 단계에서 done인지
+    iou_eval_done_count INTEGER;  -- iou_eval에서 done인 variant 개수
 BEGIN
     -- 해당 job_id의 모든 variants 개수 및 상태 확인
     SELECT 
@@ -96,16 +97,29 @@ BEGIN
     -- 모든 variants가 같은 단계에서 done인지 확인
     all_same_step_done := (current_step_done_count = total_count);
     
-    -- 모든 variants가 같은 단계에서 done인 경우
-    IF all_same_step_done THEN
+    -- iou_eval 단계 특별 처리: 모든 variants가 iou_eval, done일 때만 job을 done으로 업데이트
+    -- (failed나 진행 중인 variant가 있으면 안 됨 - 파이프라인 뒷 파트에서 모든 variants 활용)
+    IF NEW.current_step = 'iou_eval' AND NEW.status = 'done' THEN
+        -- iou_eval에서 done인 variant 개수 확인
+        SELECT COUNT(*) INTO iou_eval_done_count
+        FROM jobs_variants
+        WHERE job_id = NEW.job_id
+          AND current_step = 'iou_eval'
+          AND status = 'done';
+        
+        -- 모든 variants가 iou_eval, done인 경우에만 job을 done으로 업데이트
+        -- (failed나 running/queued variant가 없어야 함)
+        IF iou_eval_done_count = total_count AND running_count = 0 AND queued_count = 0 AND failed_count = 0 THEN
+            job_status := 'done';
+            job_current_step := 'iou_eval';
+        ELSE
+            job_status := 'running';
+            job_current_step := 'iou_eval';
+        END IF;
+    -- 모든 variants가 같은 단계에서 done인 경우 (iou_eval 제외, 위에서 처리)
+    ELSIF all_same_step_done AND NEW.current_step != 'iou_eval' THEN
         job_status := 'done';
         job_current_step := NEW.current_step;  -- 현재 단계로 업데이트
-        
-        -- iou_eval 단계에서 완료된 경우는 최종 완료
-        IF NEW.current_step = 'iou_eval' THEN
-            -- 이미 done 상태이므로 그대로 유지
-            NULL;
-        END IF;
     -- 일부는 done, 일부는 failed (전체 완료)
     ELSIF failed_count > 0 AND (done_count + failed_count) = total_count THEN
         job_status := 'failed';
