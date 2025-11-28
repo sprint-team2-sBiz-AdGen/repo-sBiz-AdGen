@@ -2,6 +2,7 @@
 -- PostgreSQL LISTEN/NOTIFY를 사용하여 jobs 테이블의 상태 변화를 실시간으로 감지
 -- 
 -- created_at: 2025-11-28
+-- updated_at: 2025-11-28
 -- author: LEEYH205
 -- description: Trigger function and trigger for job state change notifications
 -- version: 1.0.0

@@ -269,6 +269,7 @@ CREATE TABLE IF NOT EXISTS planner_proposals (
 CREATE TABLE IF NOT EXISTS overlay_layouts (
     overlay_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     proposal_id UUID REFERENCES planner_proposals(proposal_id),
+    job_variants_id UUID REFERENCES jobs_variants(job_variants_id),  -- job_variants 연결
     layout JSONB,
     x_ratio DECIMAL(5,4),
     y_ratio DECIMAL(5,4),
@@ -448,6 +449,7 @@ CREATE INDEX IF NOT EXISTS idx_yolo_runs_job_id ON yolo_runs(job_id);
 CREATE INDEX IF NOT EXISTS idx_yolo_runs_image_asset_id ON yolo_runs(image_asset_id);
 CREATE INDEX IF NOT EXISTS idx_planner_proposals_image_id ON planner_proposals(image_asset_id);
 CREATE INDEX IF NOT EXISTS idx_overlay_layouts_proposal_id ON overlay_layouts(proposal_id);
+CREATE INDEX IF NOT EXISTS idx_overlay_layouts_job_variants_id ON overlay_layouts(job_variants_id);
 CREATE INDEX IF NOT EXISTS idx_renders_overlay_id ON renders(overlay_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_job_id ON evaluations(job_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_overlay_id ON evaluations(overlay_id);

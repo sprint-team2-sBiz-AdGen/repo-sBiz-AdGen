@@ -2,9 +2,10 @@
 -- PostgreSQL LISTEN/NOTIFY를 사용하여 jobs_variants 테이블의 상태 변화를 실시간으로 감지
 -- 
 -- created_at: 2025-11-28
+-- updated_at: 2025-11-28
 -- author: LEEYH205
 -- description: Trigger function and trigger for job variant state change notifications
--- version: 1.0.0
+-- version: 1.1.0
 --
 -- 옵션 C (하이브리드) 구현:
 -- - jobs_variants 상태 변경 시 NOTIFY 발행
@@ -58,37 +59,82 @@ COMMENT ON TRIGGER job_variant_state_change_trigger ON jobs_variants IS
 -- ============================================
 
 -- 트리거 함수: 모든 variants 완료 시 jobs 테이블 업데이트
+-- 매 단계마다 모든 variants가 같은 단계에서 done이면 jobs 테이블도 해당 단계로 업데이트
 CREATE OR REPLACE FUNCTION check_all_variants_done()
 RETURNS TRIGGER AS $$
 DECLARE
     total_count INTEGER;
     done_count INTEGER;
     failed_count INTEGER;
+    running_count INTEGER;
+    queued_count INTEGER;
+    current_step_done_count INTEGER;  -- 현재 단계에서 done인 variants 개수
+    current_step_failed_count INTEGER;  -- 현재 단계에서 failed인 variants 개수
     job_status TEXT;
     job_current_step TEXT;
+    all_same_step_done BOOLEAN;  -- 모든 variants가 같은 단계에서 done인지
 BEGIN
-    -- 해당 job_id의 모든 variants 개수 확인
+    -- 해당 job_id의 모든 variants 개수 및 상태 확인
     SELECT 
         COUNT(*),
         COUNT(*) FILTER (WHERE status = 'done'),
-        COUNT(*) FILTER (WHERE status = 'failed')
-    INTO total_count, done_count, failed_count
+        COUNT(*) FILTER (WHERE status = 'failed'),
+        COUNT(*) FILTER (WHERE status = 'running'),
+        COUNT(*) FILTER (WHERE status = 'queued'),
+        COUNT(*) FILTER (WHERE status = 'done' AND current_step = NEW.current_step),  -- 현재 단계에서 done
+        COUNT(*) FILTER (WHERE status = 'failed' AND current_step = NEW.current_step)  -- 현재 단계에서 failed
+    INTO total_count, done_count, failed_count, running_count, queued_count,
+         current_step_done_count, current_step_failed_count
     FROM jobs_variants
     WHERE job_id = NEW.job_id;
     
-    -- 모든 variants가 완료되면 jobs 테이블 업데이트
-    IF total_count > 0 AND done_count = total_count THEN
-        -- 모든 variants가 done 상태
+    -- img_gen 단계는 제외 (파이프라인 시작 전 단계)
+    IF NEW.current_step = 'img_gen' THEN
+        RETURN NEW;
+    END IF;
+    
+    -- 모든 variants가 같은 단계에서 done인지 확인
+    all_same_step_done := (current_step_done_count = total_count);
+    
+    -- 모든 variants가 같은 단계에서 done인 경우
+    IF all_same_step_done THEN
         job_status := 'done';
-        job_current_step := 'iou_eval';  -- yh 파트의 마지막 단계
+        job_current_step := NEW.current_step;  -- 현재 단계로 업데이트
+        
+        -- iou_eval 단계에서 완료된 경우는 최종 완료
+        IF NEW.current_step = 'iou_eval' THEN
+            -- 이미 done 상태이므로 그대로 유지
+            NULL;
+        END IF;
+    -- 일부는 done, 일부는 failed (전체 완료)
     ELSIF failed_count > 0 AND (done_count + failed_count) = total_count THEN
-        -- 일부는 done, 일부는 failed (전체 완료)
         job_status := 'failed';
         job_current_step := NEW.current_step;  -- 현재 단계 유지
-    ELSIF done_count > 0 OR failed_count > 0 THEN
-        -- 일부만 완료 (진행 중)
+    -- 진행 중인 variants가 있는 경우
+    ELSIF running_count > 0 OR queued_count > 0 THEN
         job_status := 'running';
-        job_current_step := 'vlm_analyze';  -- yh 파트 시작 단계 유지
+        -- 현재 단계에서 done인 variants가 있으면 해당 단계로 업데이트
+        IF current_step_done_count > 0 THEN
+            job_current_step := NEW.current_step;
+        ELSE
+            -- 아직 현재 단계에서 done인 variant가 없으면 이전 단계 유지
+            -- (jobs 테이블의 current_step을 변경하지 않음)
+            SELECT current_step INTO job_current_step
+            FROM jobs
+            WHERE job_id = NEW.job_id;
+        END IF;
+    -- 일부만 완료 (진행 중)
+    ELSIF done_count > 0 OR failed_count > 0 THEN
+        job_status := 'running';
+        -- 현재 단계에서 done인 variants가 있으면 해당 단계로 업데이트
+        IF current_step_done_count > 0 THEN
+            job_current_step := NEW.current_step;
+        ELSE
+            -- 아직 현재 단계에서 done인 variant가 없으면 이전 단계 유지
+            SELECT current_step INTO job_current_step
+            FROM jobs
+            WHERE job_id = NEW.job_id;
+        END IF;
     ELSE
         -- 아직 시작하지 않음
         RETURN NEW;
@@ -119,5 +165,5 @@ CREATE TRIGGER check_all_variants_done_trigger
 
 -- 트리거 생성 확인
 COMMENT ON TRIGGER check_all_variants_done_trigger ON jobs_variants IS 
-    'jobs_variants 테이블의 status가 done 또는 failed로 변경될 때, 모든 variants 완료 여부를 확인하고 jobs 테이블을 자동 업데이트';
+    'jobs_variants 테이블의 status가 done 또는 failed로 변경될 때, 모든 variants 완료 여부를 확인하고 jobs 테이블을 자동 업데이트. 매 단계마다 모든 variants가 같은 단계에서 done이면 jobs.current_step도 해당 단계로 업데이트. img_gen 단계는 제외';
 
