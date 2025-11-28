@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS gen_models (
 -- GEN_RUNS 테이블
 CREATE TABLE IF NOT EXISTS gen_runs (
     run_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_id UUID REFERENCES jobs(job_id),  -- FK
     tenant_id VARCHAR(255) REFERENCES tenants(tenant_id),  -- FK
     src_asset_id UUID REFERENCES image_assets(image_asset_id),  -- FK, 원본 이미지 (Original image)
     cutout_asset_id UUID REFERENCES image_assets(image_asset_id),  -- FK, 누끼 이미지 (Cutout image)
@@ -126,6 +127,8 @@ CREATE TABLE IF NOT EXISTS gen_runs (
     bg_width INTEGER,  -- 이미지 가로 크기 (Image width)
     bg_height INTEGER,  -- 이미지 세로 크기 (Image height)
     status TEXT DEFAULT 'queued',  -- Possible values: queued/running/done/failed
+    latency_ms FLOAT,
+    pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     finished_at TIMESTAMP WITH TIME ZONE  -- 상태가 done/failed 일때만 (Only when status is done/failed)
 );
@@ -144,6 +147,8 @@ CREATE TABLE IF NOT EXISTS gen_variants (
     seed_base INTEGER DEFAULT 13,  -- 13 (일단 고정) (13 (fixed for now))
     steps INTEGER DEFAULT 20,  -- 20 (일단 고정) (20 (fixed for now))
     infer_ms FLOAT,  -- 추론시간(ms) (Inference time (ms))
+    latency_ms FLOAT,
+    pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -420,6 +425,7 @@ CREATE INDEX IF NOT EXISTS idx_image_assets_creator_id ON image_assets(creator_i
 CREATE INDEX IF NOT EXISTS idx_image_assets_tenant_id ON image_assets(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_stores_user_id ON stores(user_id);
 CREATE INDEX IF NOT EXISTS idx_stores_image_id ON stores(image_id);
+CREATE INDEX IF NOT EXISTS idx_gen_runs_job_id ON gen_runs(job_id);
 CREATE INDEX IF NOT EXISTS idx_gen_runs_tenant_id ON gen_runs(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_gen_runs_model_id ON gen_runs(model_id);
 CREATE INDEX IF NOT EXISTS idx_gen_runs_src_asset_id ON gen_runs(src_asset_id);
