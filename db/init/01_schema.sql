@@ -184,8 +184,8 @@ CREATE TABLE IF NOT EXISTS jobs_variants (
     job_variants_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     job_id UUID REFERENCES jobs(job_id),  -- FK
     img_asset_id UUID REFERENCES image_assets(image_asset_id),  -- FK
-    rank INTEGER,
-    selected BOOLEAN,
+    creation_order INTEGER NOT NULL,
+    selected BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -459,7 +459,7 @@ CREATE INDEX IF NOT EXISTS idx_job_inputs_img_asset_id ON job_inputs(img_asset_i
 CREATE INDEX IF NOT EXISTS idx_job_inputs_tone_style_id ON job_inputs(tone_style_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id ON jobs_variants(job_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_img_asset_id ON jobs_variants(img_asset_id);
-CREATE INDEX IF NOT EXISTS idx_jobs_variants_rank ON jobs_variants(rank);
+CREATE INDEX IF NOT EXISTS idx_jobs_variants_creation_order ON jobs_variants(creation_order);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_selected ON jobs_variants(selected);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_job_id ON vlm_traces(job_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_prompt_id ON vlm_traces(prompt_id);
