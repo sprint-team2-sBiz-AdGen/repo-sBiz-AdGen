@@ -164,6 +164,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT DEFAULT 'queued',  -- Possible values: queued, running, done, failed
     current_step TEXT,  -- Current pipeline step: 'vlm_analyze', 'vlm_planner', 'vlm_judge', 'llm_translate', 'llm_prompt', etc.
     version TEXT,
+    pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -175,6 +176,7 @@ CREATE TABLE IF NOT EXISTS job_inputs (
     tone_style_id UUID REFERENCES tone_styles(tone_style_id),  -- FK
     desc_kor TEXT,
     desc_eng TEXT,
+    pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -186,6 +188,9 @@ CREATE TABLE IF NOT EXISTS jobs_variants (
     img_asset_id UUID REFERENCES image_assets(image_asset_id),  -- FK
     creation_order INTEGER NOT NULL,
     selected BOOLEAN DEFAULT FALSE,
+    status TEXT DEFAULT 'queued',  -- queued, running, done, failed
+    current_step TEXT DEFAULT 'vlm_analyze',  -- 'vlm_analyze', 'yolo_detect', 'planner', 'overlay', 'vlm_judge', 'ocr_eval', 'readability_eval', 'iou_eval'
+    pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -461,6 +466,9 @@ CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id ON jobs_variants(job_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_img_asset_id ON jobs_variants(img_asset_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_creation_order ON jobs_variants(creation_order);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_selected ON jobs_variants(selected);
+CREATE INDEX IF NOT EXISTS idx_jobs_variants_status ON jobs_variants(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_variants_current_step ON jobs_variants(current_step);
+CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id_status ON jobs_variants(job_id, status);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_job_id ON vlm_traces(job_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_prompt_id ON vlm_traces(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_operation_type ON vlm_traces(operation_type);
