@@ -2,10 +2,11 @@
 -- PostgreSQL LISTEN/NOTIFY를 사용하여 jobs_variants 테이블의 상태 변화를 실시간으로 감지
 -- 
 -- created_at: 2025-11-28
--- updated_at: 2025-11-28
+-- updated_at: 2025-11-29
 -- author: LEEYH205
 -- description: Trigger function and trigger for job variant state change notifications
--- version: 1.1.0
+-- version: 1.2.0
+-- changes: iou_eval 단계 처리 시 디버깅 로깅 추가
 --
 -- 옵션 C (하이브리드) 구현:
 -- - jobs_variants 상태 변경 시 NOTIFY 발행
@@ -100,21 +101,29 @@ BEGIN
     -- iou_eval 단계 특별 처리: 모든 variants가 iou_eval, done일 때만 job을 done으로 업데이트
     -- (failed나 진행 중인 variant가 있으면 안 됨 - 파이프라인 뒷 파트에서 모든 variants 활용)
     IF NEW.current_step = 'iou_eval' AND NEW.status = 'done' THEN
-        -- iou_eval에서 done인 variant 개수 확인
+        -- iou_eval에서 done인 variant 개수 확인 (NEW 레코드 포함)
         SELECT COUNT(*) INTO iou_eval_done_count
         FROM jobs_variants
         WHERE job_id = NEW.job_id
           AND current_step = 'iou_eval'
           AND status = 'done';
         
+        -- 디버깅 로깅 (트리거 실행 여부 및 조건 확인)
+        RAISE NOTICE '[TRIGGER] iou_eval done 체크: job_id=%, variant_id=%, iou_done=%, total=%, running=%, queued=%, failed=%', 
+            NEW.job_id, NEW.job_variants_id, iou_eval_done_count, total_count, running_count, queued_count, failed_count;
+        
         -- 모든 variants가 iou_eval, done인 경우에만 job을 done으로 업데이트
         -- (failed나 running/queued variant가 없어야 함)
+        -- 중요: NEW 레코드가 이미 업데이트된 상태이므로, iou_eval_done_count는 NEW를 포함하여 계산됨
         IF iou_eval_done_count = total_count AND running_count = 0 AND queued_count = 0 AND failed_count = 0 THEN
             job_status := 'done';
             job_current_step := 'iou_eval';
+            RAISE NOTICE '[TRIGGER] ✅ Job을 done으로 업데이트: job_id=%', NEW.job_id;
         ELSE
             job_status := 'running';
             job_current_step := 'iou_eval';
+            RAISE NOTICE '[TRIGGER] ❌ Job을 done으로 업데이트하지 않음: job_id=%, 조건 불만족 (iou_done=% != total=% OR running=% OR queued=% OR failed=%)', 
+                NEW.job_id, iou_eval_done_count, total_count, running_count, queued_count, failed_count;
         END IF;
     -- 모든 variants가 같은 단계에서 done인 경우 (iou_eval 제외, 위에서 처리)
     ELSIF all_same_step_done AND NEW.current_step != 'iou_eval' THEN
