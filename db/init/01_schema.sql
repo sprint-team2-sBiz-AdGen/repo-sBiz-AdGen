@@ -164,6 +164,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT DEFAULT 'queued',  -- Possible values: queued, running, done, failed
     current_step TEXT,  -- Current pipeline step: 'vlm_analyze', 'vlm_planner', 'vlm_judge', 'llm_translate', 'llm_prompt', etc.
     version TEXT,
+    retry_count INTEGER DEFAULT 0,  -- Job 재시도 횟수 (자동 복구 로직에 의해 증가)
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -190,6 +191,7 @@ CREATE TABLE IF NOT EXISTS jobs_variants (
     selected BOOLEAN DEFAULT FALSE,
     status TEXT DEFAULT 'queued',  -- queued, running, done, failed
     current_step TEXT DEFAULT 'vlm_analyze',  -- 'vlm_analyze', 'yolo_detect', 'planner', 'overlay', 'vlm_judge', 'ocr_eval', 'readability_eval', 'iou_eval'
+    retry_count INTEGER DEFAULT 0,  -- Variant 재시도 횟수 (자동 복구 로직에 의해 증가)
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -462,6 +464,8 @@ CREATE INDEX IF NOT EXISTS idx_jobs_tenant_id ON jobs(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_store_id ON jobs(store_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_current_step ON jobs(current_step);
+CREATE INDEX IF NOT EXISTS idx_jobs_retry_count ON jobs(retry_count);
+CREATE INDEX IF NOT EXISTS idx_jobs_status_retry_count ON jobs(status, retry_count);
 CREATE INDEX IF NOT EXISTS idx_job_inputs_img_asset_id ON job_inputs(img_asset_id);
 CREATE INDEX IF NOT EXISTS idx_job_inputs_tone_style_id ON job_inputs(tone_style_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id ON jobs_variants(job_id);
@@ -471,6 +475,9 @@ CREATE INDEX IF NOT EXISTS idx_jobs_variants_selected ON jobs_variants(selected)
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_status ON jobs_variants(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_current_step ON jobs_variants(current_step);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id_status ON jobs_variants(job_id, status);
+CREATE INDEX IF NOT EXISTS idx_jobs_variants_retry_count ON jobs_variants(retry_count);
+CREATE INDEX IF NOT EXISTS idx_jobs_variants_status_retry_count ON jobs_variants(status, retry_count);
+CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id_retry_count ON jobs_variants(job_id, retry_count);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_job_id ON vlm_traces(job_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_prompt_id ON vlm_traces(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_operation_type ON vlm_traces(operation_type);
