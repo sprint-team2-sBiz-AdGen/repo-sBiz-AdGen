@@ -217,7 +217,7 @@ CREATE TABLE IF NOT EXISTS vlm_traces (
     vlm_trace_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     job_id UUID REFERENCES jobs(job_id),  -- FK
     provider TEXT,  -- Example: 'llava'
-    prompt_id UUID,  -- FK (pbg_prompt_assets 참조 가능)
+    prompt_id UUID REFERENCES vlm_prompt_assets(prompt_asset_id) ON DELETE SET NULL,  -- FK: VLM 프롬프트 참조
     operation_type TEXT,  -- Possible values: analyze, planner, judge
     request JSONB,
     response JSONB,
