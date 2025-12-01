@@ -1,7 +1,7 @@
 -- FeedlyAI Database Schema
--- Version: 0.8
+-- Version: 0.9
 -- Created: 2025-11-16
--- Updated: 2025-11-25
+-- Updated: 2025-12-01
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -48,14 +48,16 @@ CREATE TABLE IF NOT EXISTS image_assets (
 );
 
 -- STORES 테이블
+-- 스토어 정보를 저장하는 테이블
+-- jobs.store_id를 통해 참조하여 스토어 정보 조회
 CREATE TABLE IF NOT EXISTS stores (
     store_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(user_id),
-    image_id UUID REFERENCES image_assets(image_asset_id),
-    title VARCHAR(500),
-    body TEXT,
-    store_category TEXT,
-    auto_scoring_flag BOOLEAN DEFAULT FALSE,
+    user_id UUID REFERENCES users(user_id),  -- FK: 사용자 ID
+    image_id UUID REFERENCES image_assets(image_asset_id),  -- FK: 이미지 ID
+    title VARCHAR(500),  -- 스토어 제목
+    body TEXT,  -- 스토어 설명 (스토어 정보로 사용, 위치, 인스타 아이디, 링크 등 포함 가능)
+    store_category TEXT,  -- 스토어 카테고리
+    auto_scoring_flag BOOLEAN DEFAULT FALSE,  -- 자동 점수 계산 플래그
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -160,7 +162,7 @@ CREATE TABLE IF NOT EXISTS gen_variants (
 CREATE TABLE IF NOT EXISTS jobs (
     job_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id VARCHAR(255) REFERENCES tenants(tenant_id),  -- FK
-    store_id UUID,  -- FK (stores 테이블이 있다면 REFERENCES stores(store_id))
+    store_id UUID REFERENCES stores(store_id),  -- FK: 스토어 정보 조회용 (stores 테이블 참조)
     status TEXT DEFAULT 'queued',  -- Possible values: queued, running, done, failed
     current_step TEXT,  -- Current pipeline step: 'vlm_analyze', 'vlm_planner', 'vlm_judge', 'llm_translate', 'llm_prompt', etc.
     version TEXT,
@@ -175,12 +177,13 @@ CREATE TABLE IF NOT EXISTS job_inputs (
     job_id UUID PRIMARY KEY REFERENCES jobs(job_id),  -- PK, FK
     img_asset_id UUID REFERENCES image_assets(image_asset_id),  -- FK
     tone_style_id UUID REFERENCES tone_styles(tone_style_id),  -- FK
-    desc_kor TEXT,
-    desc_eng TEXT,
+    desc_kor TEXT,  -- 사용자 입력: 한국어 설명 (30자 이내)
+    desc_eng TEXT,  -- GPT Kor→Eng 변환 결과 또는 영어 광고문구
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+-- 참고: 스토어 정보는 jobs.store_id를 통해 stores 테이블에서 조회
 
 -- JOBS_VARIANTS 테이블
 CREATE TABLE IF NOT EXISTS jobs_variants (
@@ -354,7 +357,28 @@ CREATE TABLE IF NOT EXISTS llm_traces (
 );
 
 -- ============================================
--- 6. 인스타그램 피드 생성 (Instagram Feed Generation)
+-- 6. 텍스트 생성 및 광고문구 관리 (Text Generation & Ad Copy Management)
+-- ============================================
+
+-- TXT_AD_COPY_GENERATIONS 테이블
+-- 광고문구 생성 과정의 모든 단계를 추적하는 테이블
+-- JS 파트와 YH 파트 간 데이터 공유 및 Trace 관리
+CREATE TABLE IF NOT EXISTS txt_ad_copy_generations (
+    ad_copy_gen_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_id UUID NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,  -- FK: Job과 연결 (이미지 처리와 동일한 Job)
+    llm_trace_id UUID REFERENCES llm_traces(llm_trace_id) ON DELETE SET NULL,  -- FK: GPT API 호출 Trace 참조
+    generation_stage TEXT NOT NULL,  -- 생성 단계: 'kor_to_eng', 'ad_copy_eng', 'refined_ad_copy', 'eng_to_kor'
+    ad_copy_kor TEXT,  -- 한글 광고문구 (최종, eng_to_kor 단계에서 생성)
+    ad_copy_eng TEXT,  -- 영어 광고문구 (kor_to_eng, ad_copy_eng 단계에서 생성)
+    refined_ad_copy_eng TEXT,  -- 조정된 영어 광고문구 (refined_ad_copy 단계에서 생성, 선택적)
+    status TEXT DEFAULT 'queued',  -- 상태: 'queued', 'running', 'done', 'failed'
+    pk SERIAL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- 7. 인스타그램 피드 생성 (Instagram Feed Generation)
 -- ============================================
 
 -- INSTAGRAM_FEEDS 테이블 (리팩토링된 버전)
@@ -362,18 +386,20 @@ CREATE TABLE IF NOT EXISTS instagram_feeds (
     instagram_feed_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
     -- Foreign Keys
-    job_id UUID REFERENCES jobs(job_id),  -- 파이프라인과 연결 시 사용
-    overlay_id UUID REFERENCES overlay_layouts(overlay_id),  -- 오버레이 결과와 연결 시 사용
-    llm_model_id UUID REFERENCES llm_models(llm_model_id),  -- 사용된 LLM 모델
+    job_id UUID REFERENCES jobs(job_id),  -- FK: 파이프라인과 연결 시 사용
+    overlay_id UUID REFERENCES overlay_layouts(overlay_id),  -- FK: 오버레이 결과와 연결 시 사용
+    llm_model_id UUID REFERENCES llm_models(llm_model_id),  -- FK: 사용된 LLM 모델
+    llm_trace_id UUID REFERENCES llm_traces(llm_trace_id) ON DELETE SET NULL,  -- FK: 인스타그램 피드글 생성 GPT API 호출 Trace 참조
     
     -- Tenant 정보
     tenant_id VARCHAR(255) NOT NULL,  -- 테넌트 ID
     
     -- 입력 데이터 (요청 시 받은 정보)
     refined_ad_copy_eng TEXT NOT NULL,  -- 조정된 광고문구 (영어)
+    ad_copy_kor TEXT,  -- 한글 광고문구 (GPT Eng→Kor 변환 결과, txt_ad_copy_generations에서 조회)
     tone_style TEXT NOT NULL,  -- 톤 & 스타일
     product_description TEXT NOT NULL,  -- 제품 설명
-    store_information TEXT NOT NULL,  -- 스토어 정보
+    store_information TEXT NOT NULL,  -- 스토어 정보 (jobs.store_id → stores 테이블에서 조회한 정보를 저장)
     gpt_prompt TEXT NOT NULL,  -- GPT 프롬프트
     
     -- 출력 데이터 (생성된 결과)
@@ -400,7 +426,7 @@ CREATE TABLE IF NOT EXISTS instagram_feeds (
 );
 
 -- ============================================
--- 7. 시스템 이벤트 (System Events)
+-- 8. 시스템 이벤트 (System Events)
 -- ============================================
 
 -- WORKER_EVENTS 테이블
@@ -491,9 +517,15 @@ CREATE INDEX IF NOT EXISTS idx_llm_traces_operation_type ON llm_traces(operation
 CREATE INDEX IF NOT EXISTS idx_llm_models_provider ON llm_models(provider);
 CREATE INDEX IF NOT EXISTS idx_llm_models_model_name ON llm_models(model_name);
 CREATE INDEX IF NOT EXISTS idx_llm_models_is_active ON llm_models(is_active);
+CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_job_id ON txt_ad_copy_generations(job_id);
+CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_llm_trace_id ON txt_ad_copy_generations(llm_trace_id);
+CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_generation_stage ON txt_ad_copy_generations(generation_stage);
+CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_status ON txt_ad_copy_generations(status);
+CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_job_id_stage ON txt_ad_copy_generations(job_id, generation_stage);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_job_id ON instagram_feeds(job_id);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_overlay_id ON instagram_feeds(overlay_id);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_llm_model_id ON instagram_feeds(llm_model_id);
+CREATE INDEX IF NOT EXISTS idx_instagram_feeds_llm_trace_id ON instagram_feeds(llm_trace_id);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_tenant_id ON instagram_feeds(tenant_id);
 
 -- 시간 기반 인덱스 (조회 성능 향상)
@@ -505,6 +537,7 @@ CREATE INDEX IF NOT EXISTS idx_job_inputs_created_at ON job_inputs(created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_created_at ON jobs_variants(created_at);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_created_at ON vlm_traces(created_at);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_created_at ON llm_traces(created_at);
+CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_created_at ON txt_ad_copy_generations(created_at);
 CREATE INDEX IF NOT EXISTS idx_evaluations_created_at ON evaluations(created_at);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_created_at ON instagram_feeds(created_at);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_prompt_tokens ON instagram_feeds(prompt_tokens);
@@ -526,6 +559,40 @@ CREATE INDEX IF NOT EXISTS idx_llm_traces_request ON llm_traces USING GIN (reque
 CREATE INDEX IF NOT EXISTS idx_llm_traces_response ON llm_traces USING GIN (response);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_gpt_response_raw ON instagram_feeds USING GIN (gpt_response_raw);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_token_usage ON instagram_feeds USING GIN (token_usage);
+
+-- ============================================
+-- 테이블 주석 (Table Comments)
+-- ============================================
+
+-- txt_ad_copy_generations 테이블 주석
+COMMENT ON TABLE txt_ad_copy_generations IS 
+    '광고문구 생성 과정의 모든 단계를 추적하는 테이블. JS 파트(kor_to_eng, ad_copy_eng)와 YH 파트(refined_ad_copy, eng_to_kor) 간 데이터 공유 및 Trace 관리';
+
+COMMENT ON COLUMN txt_ad_copy_generations.generation_stage IS 
+    '생성 단계: kor_to_eng (한→영 변환, JS 파트), ad_copy_eng (영어 광고문구 생성, JS 파트), refined_ad_copy (조정, YH 파트, 선택적), eng_to_kor (영→한 변환, YH 파트)';
+
+COMMENT ON COLUMN txt_ad_copy_generations.llm_trace_id IS 
+    'llm_traces 테이블 참조. 각 단계의 GPT API 호출 Trace. vlm_traces와 동일한 패턴으로 관리';
+
+COMMENT ON COLUMN txt_ad_copy_generations.ad_copy_eng IS 
+    '영어 광고문구. kor_to_eng 단계에서는 영어 설명, ad_copy_eng 단계에서는 영어 광고문구 저장';
+
+COMMENT ON COLUMN txt_ad_copy_generations.refined_ad_copy_eng IS 
+    '조정된 영어 광고문구. vlm_analyze 검증 결과에 따라 refined_ad_copy 단계에서 생성 (선택적)';
+
+COMMENT ON COLUMN txt_ad_copy_generations.ad_copy_kor IS 
+    '한글 광고문구. eng_to_kor 단계에서 생성된 최종 한글 광고문구';
+
+-- instagram_feeds 테이블 주석 추가
+COMMENT ON COLUMN instagram_feeds.llm_trace_id IS 
+    'llm_traces 테이블 참조. 인스타그램 피드글 생성 GPT API 호출 Trace';
+
+COMMENT ON COLUMN instagram_feeds.ad_copy_kor IS 
+    '한글 광고문구. GPT Eng→Kor 변환 결과. txt_ad_copy_generations.ad_copy_kor에서 조회';
+
+-- jobs 테이블 주석 추가
+COMMENT ON COLUMN jobs.store_id IS 
+    'stores 테이블 참조. 스토어 정보는 jobs.store_id를 통해 stores 테이블에서 조회 (stores.title, stores.body, stores.store_category 등)';
 
 
 
