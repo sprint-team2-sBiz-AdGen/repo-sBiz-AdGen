@@ -217,7 +217,7 @@ CREATE TABLE IF NOT EXISTS vlm_traces (
     vlm_trace_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     job_id UUID REFERENCES jobs(job_id),  -- FK
     provider TEXT,  -- Example: 'llava'
-    prompt_id UUID REFERENCES vlm_prompt_assets(prompt_asset_id) ON DELETE SET NULL,  -- FK: VLM 프롬프트 참조
+    prompt_id UUID,  -- FK (pbg_prompt_assets 참조 가능)
     operation_type TEXT,  -- Possible values: analyze, planner, judge
     request JSONB,
     response JSONB,
@@ -351,6 +351,11 @@ CREATE TABLE IF NOT EXISTS llm_traces (
     request JSONB,
     response JSONB,
     latency_ms FLOAT,
+    -- 토큰 사용량 정보 (모든 LLM 호출의 토큰 정보를 통합 관리)
+    prompt_tokens INTEGER,  -- 프롬프트 토큰 수 (입력)
+    completion_tokens INTEGER,  -- 생성 토큰 수 (출력)
+    total_tokens INTEGER,  -- 총 토큰 수
+    token_usage JSONB,  -- 토큰 사용량 정보 원본 (예: {"prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300})
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -381,43 +386,35 @@ CREATE TABLE IF NOT EXISTS txt_ad_copy_generations (
 -- 7. 인스타그램 피드 생성 (Instagram Feed Generation)
 -- ============================================
 
--- INSTAGRAM_FEEDS 테이블 (리팩토링된 버전)
+-- INSTAGRAM_FEEDS 테이블 (최적화된 버전)
 CREATE TABLE IF NOT EXISTS instagram_feeds (
     instagram_feed_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
-    -- Foreign Keys
-    job_id UUID REFERENCES jobs(job_id),  -- FK: 파이프라인과 연결 시 사용
-    overlay_id UUID REFERENCES overlay_layouts(overlay_id),  -- FK: 오버레이 결과와 연결 시 사용
-    llm_model_id UUID REFERENCES llm_models(llm_model_id),  -- FK: 사용된 LLM 모델
-    llm_trace_id UUID REFERENCES llm_traces(llm_trace_id) ON DELETE SET NULL,  -- FK: 인스타그램 피드글 생성 GPT API 호출 Trace 참조
+    -- Foreign Keys (핵심 연결)
+    job_id UUID REFERENCES jobs(job_id),  -- FK: 파이프라인과 연결
+    llm_trace_id UUID REFERENCES llm_traces(llm_trace_id) ON DELETE SET NULL,  -- FK: 인스타그램 피드글 생성 GPT API 호출 Trace (토큰 정보는 llm_traces에서 조회)
+    overlay_id UUID REFERENCES overlay_layouts(overlay_id),  -- FK: 오버레이 결과와 연결 (선택적)
     
     -- Tenant 정보
     tenant_id VARCHAR(255) NOT NULL,  -- 테넌트 ID
     
-    -- 입력 데이터 (요청 시 받은 정보)
+    -- 입력 데이터 (필수)
     refined_ad_copy_eng TEXT NOT NULL,  -- 조정된 광고문구 (영어)
     ad_copy_kor TEXT,  -- 한글 광고문구 (GPT Eng→Kor 변환 결과, txt_ad_copy_generations에서 조회)
     tone_style TEXT NOT NULL,  -- 톤 & 스타일
     product_description TEXT NOT NULL,  -- 제품 설명
-    store_information TEXT NOT NULL,  -- 스토어 정보 (jobs.store_id → stores 테이블에서 조회한 정보를 저장)
-    gpt_prompt TEXT NOT NULL,  -- GPT 프롬프트
+    gpt_prompt TEXT NOT NULL,  -- GPT 프롬프트 (llm_traces.request에서도 조회 가능하지만 빠른 조회를 위해 유지)
     
-    -- 출력 데이터 (생성된 결과)
+    -- 출력 데이터 (핵심 결과물)
     instagram_ad_copy TEXT NOT NULL,  -- 생성된 인스타그램 피드 글
     hashtags TEXT NOT NULL,  -- 생성된 해시태그 (예: "#태그1 #태그2 #태그3")
     
-    -- LLM 실행 메타데이터 (실제 실행 시 사용된 값)
-    used_temperature FLOAT,  -- 실제 사용된 temperature (llm_models의 기본값과 다를 수 있음)
-    used_max_tokens INTEGER,  -- 실제 사용된 최대 토큰 수
-    gpt_prompt_used TEXT,  -- 실제 사용된 전체 프롬프트 (디버깅용)
-    gpt_response_raw JSONB,  -- GPT API 원본 응답 (디버깅/재생성용)
+    -- LLM 실행 메타데이터 (llm_traces에 없는 것만, 선택적)
+    used_temperature FLOAT,  -- 실제 사용된 temperature (llm_models 기본값과 다를 수 있음, llm_traces.request에서도 조회 가능)
+    used_max_tokens INTEGER,  -- 실제 사용된 최대 토큰 수 (llm_models 기본값과 다를 수 있음, llm_traces.request에서도 조회 가능)
     
-    -- 성능 메트릭
-    latency_ms FLOAT,  -- GPT API 호출 소요 시간 (밀리초)
-    prompt_tokens INTEGER,  -- 프롬프트 토큰 수 (입력, 모니터링용)
-    completion_tokens INTEGER,  -- 생성 토큰 수 (출력, 모니터링용)
-    total_tokens INTEGER,  -- 총 토큰 수 (모니터링용)
-    token_usage JSONB,  -- 토큰 사용량 정보 원본 (예: {"prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300})
+    -- 성능 메트릭 (간단한 것만, llm_traces.latency_ms와 동일하지만 빠른 조회를 위해 유지)
+    latency_ms FLOAT,  -- GPT API 호출 소요 시간 (밀리초, llm_traces.latency_ms와 동일)
     
     -- 메타데이터
     pk SERIAL,
@@ -514,6 +511,9 @@ CREATE INDEX IF NOT EXISTS idx_llm_traces_tone_style_id ON llm_traces(tone_style
 CREATE INDEX IF NOT EXISTS idx_llm_traces_enhanced_img_id ON llm_traces(enhanced_img_id);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_prompt_id ON llm_traces(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_operation_type ON llm_traces(operation_type);
+CREATE INDEX IF NOT EXISTS idx_llm_traces_prompt_tokens ON llm_traces(prompt_tokens);
+CREATE INDEX IF NOT EXISTS idx_llm_traces_completion_tokens ON llm_traces(completion_tokens);
+CREATE INDEX IF NOT EXISTS idx_llm_traces_total_tokens ON llm_traces(total_tokens);
 CREATE INDEX IF NOT EXISTS idx_llm_models_provider ON llm_models(provider);
 CREATE INDEX IF NOT EXISTS idx_llm_models_model_name ON llm_models(model_name);
 CREATE INDEX IF NOT EXISTS idx_llm_models_is_active ON llm_models(is_active);
@@ -524,7 +524,6 @@ CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_status ON txt_ad_copy_gen
 CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_job_id_stage ON txt_ad_copy_generations(job_id, generation_stage);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_job_id ON instagram_feeds(job_id);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_overlay_id ON instagram_feeds(overlay_id);
-CREATE INDEX IF NOT EXISTS idx_instagram_feeds_llm_model_id ON instagram_feeds(llm_model_id);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_llm_trace_id ON instagram_feeds(llm_trace_id);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_tenant_id ON instagram_feeds(tenant_id);
 
@@ -540,10 +539,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_traces_created_at ON llm_traces(created_at);
 CREATE INDEX IF NOT EXISTS idx_txt_ad_copy_generations_created_at ON txt_ad_copy_generations(created_at);
 CREATE INDEX IF NOT EXISTS idx_evaluations_created_at ON evaluations(created_at);
 CREATE INDEX IF NOT EXISTS idx_instagram_feeds_created_at ON instagram_feeds(created_at);
-CREATE INDEX IF NOT EXISTS idx_instagram_feeds_prompt_tokens ON instagram_feeds(prompt_tokens);
-CREATE INDEX IF NOT EXISTS idx_instagram_feeds_completion_tokens ON instagram_feeds(completion_tokens);
-CREATE INDEX IF NOT EXISTS idx_instagram_feeds_total_tokens ON instagram_feeds(total_tokens);
-CREATE INDEX IF NOT EXISTS idx_instagram_feeds_created_at_tokens ON instagram_feeds(created_at, total_tokens);
+CREATE INDEX IF NOT EXISTS idx_llm_traces_created_at_tokens ON llm_traces(created_at, total_tokens);
 
 -- JSONB 인덱스 (GIN 인덱스)
 CREATE INDEX IF NOT EXISTS idx_detections_box ON detections USING GIN (box);
@@ -557,8 +553,7 @@ CREATE INDEX IF NOT EXISTS idx_vlm_traces_request ON vlm_traces USING GIN (reque
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_response ON vlm_traces USING GIN (response);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_request ON llm_traces USING GIN (request);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_response ON llm_traces USING GIN (response);
-CREATE INDEX IF NOT EXISTS idx_instagram_feeds_gpt_response_raw ON instagram_feeds USING GIN (gpt_response_raw);
-CREATE INDEX IF NOT EXISTS idx_instagram_feeds_token_usage ON instagram_feeds USING GIN (token_usage);
+CREATE INDEX IF NOT EXISTS idx_llm_traces_token_usage ON llm_traces USING GIN (token_usage);
 
 -- ============================================
 -- 테이블 주석 (Table Comments)
@@ -583,12 +578,28 @@ COMMENT ON COLUMN txt_ad_copy_generations.refined_ad_copy_eng IS
 COMMENT ON COLUMN txt_ad_copy_generations.ad_copy_kor IS 
     '한글 광고문구. eng_to_kor 단계에서 생성된 최종 한글 광고문구';
 
+-- llm_traces 테이블 토큰 관련 주석 추가
+COMMENT ON COLUMN llm_traces.prompt_tokens IS 
+    '프롬프트 토큰 수 (입력). 모든 LLM 호출의 토큰 정보를 통합 관리';
+
+COMMENT ON COLUMN llm_traces.completion_tokens IS 
+    '생성 토큰 수 (출력). 모든 LLM 호출의 토큰 정보를 통합 관리';
+
+COMMENT ON COLUMN llm_traces.total_tokens IS 
+    '총 토큰 수. prompt_tokens + completion_tokens';
+
+COMMENT ON COLUMN llm_traces.token_usage IS 
+    '토큰 사용량 정보 원본 (JSONB). 예: {"prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300}';
+
 -- instagram_feeds 테이블 주석 추가
 COMMENT ON COLUMN instagram_feeds.llm_trace_id IS 
-    'llm_traces 테이블 참조. 인스타그램 피드글 생성 GPT API 호출 Trace';
+    'llm_traces 테이블 참조. 인스타그램 피드글 생성 GPT API 호출 Trace. 토큰 정보는 llm_traces에서 조회';
 
 COMMENT ON COLUMN instagram_feeds.ad_copy_kor IS 
     '한글 광고문구. GPT Eng→Kor 변환 결과. txt_ad_copy_generations.ad_copy_kor에서 조회';
+
+COMMENT ON COLUMN instagram_feeds.latency_ms IS 
+    'GPT API 호출 소요 시간 (밀리초). llm_traces.latency_ms와 동일하지만 빠른 조회를 위해 유지';
 
 -- jobs 테이블 주석 추가
 COMMENT ON COLUMN jobs.store_id IS 
