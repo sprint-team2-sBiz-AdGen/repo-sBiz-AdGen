@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS jobs_variants (
     status TEXT DEFAULT 'queued',  -- queued, running, done, failed
     current_step TEXT DEFAULT 'vlm_analyze',  -- 'vlm_analyze', 'yolo_detect', 'planner', 'overlay', 'vlm_judge', 'ocr_eval', 'readability_eval', 'iou_eval'
     retry_count INTEGER DEFAULT 0,  -- Variant 재시도 횟수 (자동 복구 로직에 의해 증가)
+    overlaid_img_asset_id UUID REFERENCES image_assets(image_asset_id),  -- 최종 오버레이 이미지 asset 참조 (image_type='overlaid')
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -478,6 +479,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id_status ON jobs_variants(job_
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_retry_count ON jobs_variants(retry_count);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_status_retry_count ON jobs_variants(status, retry_count);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id_retry_count ON jobs_variants(job_id, retry_count);
+CREATE INDEX IF NOT EXISTS idx_jobs_variants_overlaid_img_asset_id ON jobs_variants(overlaid_img_asset_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_job_id ON vlm_traces(job_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_prompt_id ON vlm_traces(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_operation_type ON vlm_traces(operation_type);
