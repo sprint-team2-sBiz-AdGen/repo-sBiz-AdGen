@@ -1,5 +1,5 @@
 -- FeedlyAI Database Schema
--- Version: 0.9
+-- Version: 1.0
 -- Created: 2025-11-16
 -- Updated: 2025-12-01
 
@@ -217,7 +217,7 @@ CREATE TABLE IF NOT EXISTS vlm_traces (
     vlm_trace_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     job_id UUID REFERENCES jobs(job_id),  -- FK
     provider TEXT,  -- Example: 'llava'
-    prompt_id UUID,  -- FK (pbg_prompt_assets 참조 가능)
+    prompt_id UUID REFERENCES vlm_prompt_assets(prompt_asset_id) ON DELETE SET NULL,  -- FK: VLM 프롬프트 참조
     operation_type TEXT,  -- Possible values: analyze, planner, judge
     request JSONB,
     response JSONB,
@@ -344,6 +344,7 @@ CREATE TABLE IF NOT EXISTS llm_traces (
     llm_trace_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     job_id UUID REFERENCES jobs(job_id),  -- FK
     provider TEXT,  -- Example: 'gpt'
+    llm_model_id UUID REFERENCES llm_models(llm_model_id) ON DELETE SET NULL,  -- FK: 사용된 LLM 모델 참조
     tone_style_id UUID REFERENCES tone_styles(tone_style_id),  -- FK
     enhanced_img_id UUID REFERENCES image_assets(image_asset_id),  -- FK
     prompt_id UUID,  -- FK (pbg_prompt_assets 참조 가능)
@@ -507,6 +508,7 @@ CREATE INDEX IF NOT EXISTS idx_vlm_traces_job_id ON vlm_traces(job_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_prompt_id ON vlm_traces(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_operation_type ON vlm_traces(operation_type);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_job_id ON llm_traces(job_id);
+CREATE INDEX IF NOT EXISTS idx_llm_traces_llm_model_id ON llm_traces(llm_model_id);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_tone_style_id ON llm_traces(tone_style_id);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_enhanced_img_id ON llm_traces(enhanced_img_id);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_prompt_id ON llm_traces(prompt_id);
