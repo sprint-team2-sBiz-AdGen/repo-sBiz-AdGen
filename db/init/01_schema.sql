@@ -1,7 +1,7 @@
 -- FeedlyAI Database Schema
--- Version: 1.0
+-- Version: 2.0
 -- Created: 2025-11-16
--- Updated: 2025-12-01
+-- Updated: 2025-12-03
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS image_assets (
     height INTEGER,
     creator_id UUID REFERENCES users(user_id),
     tenant_id VARCHAR(255) REFERENCES tenants(tenant_id),
+    job_id UUID REFERENCES jobs(job_id),  -- FK: Job 연결 (선택적, 파이프라인에서 생성된 이미지의 경우)
     pk SERIAL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -457,6 +458,7 @@ CREATE TABLE IF NOT EXISTS connected_nodes (
 -- Foreign Key 인덱스
 CREATE INDEX IF NOT EXISTS idx_image_assets_creator_id ON image_assets(creator_id);
 CREATE INDEX IF NOT EXISTS idx_image_assets_tenant_id ON image_assets(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_image_assets_job_id ON image_assets(job_id);
 CREATE INDEX IF NOT EXISTS idx_stores_user_id ON stores(user_id);
 CREATE INDEX IF NOT EXISTS idx_stores_image_id ON stores(image_id);
 CREATE INDEX IF NOT EXISTS idx_gen_runs_job_id ON gen_runs(job_id);
@@ -724,6 +726,7 @@ COMMENT ON COLUMN image_assets.width IS '이미지 가로 크기 (픽셀)';
 COMMENT ON COLUMN image_assets.height IS '이미지 세로 크기 (픽셀)';
 COMMENT ON COLUMN image_assets.creator_id IS 'FK: 이미지 생성자 ID (users 테이블 참조)';
 COMMENT ON COLUMN image_assets.tenant_id IS 'FK: 테넌트 ID (tenants 테이블 참조)';
+COMMENT ON COLUMN image_assets.job_id IS 'FK: Job ID (jobs 테이블 참조, 선택적, 파이프라인에서 생성된 이미지의 경우)';
 COMMENT ON COLUMN image_assets.pk IS '자동 증가 기본 키 (SERIAL)';
 COMMENT ON COLUMN image_assets.created_at IS '레코드 생성 시간';
 COMMENT ON COLUMN image_assets.updated_at IS '레코드 수정 시간';
