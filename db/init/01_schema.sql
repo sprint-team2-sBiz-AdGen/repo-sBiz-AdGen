@@ -216,6 +216,7 @@ CREATE TABLE IF NOT EXISTS vlm_prompt_assets (
 CREATE TABLE IF NOT EXISTS vlm_traces (
     vlm_trace_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     job_id UUID REFERENCES jobs(job_id),  -- FK
+    job_variants_id UUID REFERENCES jobs_variants(job_variants_id) ON DELETE SET NULL,  -- FK: Job Variant 연결 (병렬 실행 시 variant 구분)
     provider TEXT,  -- Example: 'llava'
     prompt_id UUID REFERENCES vlm_prompt_assets(prompt_asset_id) ON DELETE SET NULL,  -- FK: VLM 프롬프트 참조
     operation_type TEXT,  -- Possible values: analyze, planner, judge
@@ -505,8 +506,10 @@ CREATE INDEX IF NOT EXISTS idx_jobs_variants_status_retry_count ON jobs_variants
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_job_id_retry_count ON jobs_variants(job_id, retry_count);
 CREATE INDEX IF NOT EXISTS idx_jobs_variants_overlaid_img_asset_id ON jobs_variants(overlaid_img_asset_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_job_id ON vlm_traces(job_id);
+CREATE INDEX IF NOT EXISTS idx_vlm_traces_job_variants_id ON vlm_traces(job_variants_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_prompt_id ON vlm_traces(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_vlm_traces_operation_type ON vlm_traces(operation_type);
+CREATE INDEX IF NOT EXISTS idx_vlm_traces_job_id_variants_id ON vlm_traces(job_id, job_variants_id);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_job_id ON llm_traces(job_id);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_llm_model_id ON llm_traces(llm_model_id);
 CREATE INDEX IF NOT EXISTS idx_llm_traces_tone_style_id ON llm_traces(tone_style_id);
@@ -855,6 +858,7 @@ COMMENT ON COLUMN vlm_prompt_assets.updated_at IS '레코드 수정 시간';
 -- vlm_traces 테이블 컬럼 주석
 COMMENT ON COLUMN vlm_traces.vlm_trace_id IS 'VLM 추적 고유 식별자 (UUID)';
 COMMENT ON COLUMN vlm_traces.job_id IS 'FK: 작업 ID (jobs 테이블 참조)';
+COMMENT ON COLUMN vlm_traces.job_variants_id IS 'FK: 작업 변형 ID (jobs_variants 테이블 참조, 병렬 실행 시 variant 구분)';
 COMMENT ON COLUMN vlm_traces.provider IS 'VLM 제공자 (예: llava)';
 COMMENT ON COLUMN vlm_traces.prompt_id IS 'FK: VLM 프롬프트 ID (vlm_prompt_assets 테이블 참조)';
 COMMENT ON COLUMN vlm_traces.operation_type IS '작업 타입 (analyze, planner, judge)';
