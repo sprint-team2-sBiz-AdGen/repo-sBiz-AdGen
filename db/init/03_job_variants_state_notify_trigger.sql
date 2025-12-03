@@ -5,7 +5,7 @@
 -- updated_at: 2025-11-29
 -- author: LEEYH205
 -- description: Trigger function and trigger for job variant state change notifications
--- version: 1.2.0
+-- version: 1.3.0
 -- changes: iou_eval 단계 처리 시 디버깅 로깅 추가
 --
 -- 옵션 C (하이브리드) 구현:
@@ -20,9 +20,11 @@
 CREATE OR REPLACE FUNCTION notify_job_variant_state_change()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- current_step 또는 status가 변경된 경우에만 NOTIFY 발행
+    -- current_step, status, 또는 updated_at이 변경된 경우 NOTIFY 발행
+    -- updated_at 변경도 감지하여 INSERT 후 UPDATE 시 트리거 발동
     IF (OLD.current_step IS DISTINCT FROM NEW.current_step 
-        OR OLD.status IS DISTINCT FROM NEW.status) THEN
+        OR OLD.status IS DISTINCT FROM NEW.status
+        OR OLD.updated_at IS DISTINCT FROM NEW.updated_at) THEN
         
         PERFORM pg_notify(
             'job_variant_state_changed',
@@ -53,7 +55,7 @@ CREATE TRIGGER job_variant_state_change_trigger
 
 -- 트리거 생성 확인
 COMMENT ON TRIGGER job_variant_state_change_trigger ON jobs_variants IS 
-    'jobs_variants 테이블의 current_step 또는 status 변경 시 job_variant_state_changed 채널로 NOTIFY 발행';
+    'jobs_variants 테이블의 current_step, status, 또는 updated_at 변경 시 job_variant_state_changed 채널로 NOTIFY 발행. updated_at 변경도 감지하여 INSERT 후 UPDATE 시 트리거 발동';
 
 -- ============================================
 -- 2. 모든 variants 완료 시 jobs 테이블 자동 업데이트 트리거
