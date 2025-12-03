@@ -85,6 +85,17 @@ def count_related_data(conn, job_id: str) -> Dict[str, int]:
             result = cursor.fetchone()
             counts[table] = result[0] if result else 0
         
+        # planner_proposals는 image_asset_id를 통해 확인
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM planner_proposals
+            WHERE image_asset_id IN (
+                SELECT image_asset_id FROM image_assets WHERE job_id = %s
+            )
+        """, (job_id,))
+        result = cursor.fetchone()
+        counts['planner_proposals'] = result[0] if result else 0
+        
         # overlay_layouts는 jobs_variants_id를 통해 확인
         cursor.execute("""
             SELECT COUNT(*) 
@@ -123,7 +134,7 @@ def delete_job_data(cursor, conn, job_id: str) -> Dict[str, int]:
         # 5. llm_traces
         ("llm_traces", "DELETE FROM llm_traces WHERE job_id = %s"),
         
-        # 6. overlay_layouts (jobs_variants_id를 통해)
+        # 6. overlay_layouts (planner_proposals보다 먼저 삭제, proposal_id 참조)
         ("overlay_layouts", """
             DELETE FROM overlay_layouts
             WHERE job_variants_id IN (
@@ -132,16 +143,24 @@ def delete_job_data(cursor, conn, job_id: str) -> Dict[str, int]:
             )
         """),
         
-        # 7. jobs_variants
+        # 7. planner_proposals (image_asset_id를 통해, overlay_layouts 삭제 후)
+        ("planner_proposals", """
+            DELETE FROM planner_proposals
+            WHERE image_asset_id IN (
+                SELECT image_asset_id FROM image_assets WHERE job_id = %s
+            )
+        """),
+        
+        # 8. jobs_variants
         ("jobs_variants", "DELETE FROM jobs_variants WHERE job_id = %s"),
         
-        # 8. yolo_runs
+        # 9. yolo_runs
         ("yolo_runs", "DELETE FROM yolo_runs WHERE job_id = %s"),
         
-        # 9. detections
+        # 10. detections
         ("detections", "DELETE FROM detections WHERE job_id = %s"),
         
-        # 10. gen_variants (gen_runs의 자식 테이블이므로 먼저 삭제)
+        # 11. gen_variants (gen_runs의 자식 테이블이므로 먼저 삭제)
         ("gen_variants", """
             DELETE FROM gen_variants
             WHERE run_id IN (
@@ -149,16 +168,16 @@ def delete_job_data(cursor, conn, job_id: str) -> Dict[str, int]:
             )
         """),
         
-        # 11. gen_runs
+        # 12. gen_runs
         ("gen_runs", "DELETE FROM gen_runs WHERE job_id = %s"),
         
-        # 11. job_inputs
+        # 13. job_inputs
         ("job_inputs", "DELETE FROM job_inputs WHERE job_id = %s"),
         
-        # 12. image_assets (job_id로 연결된 것만)
+        # 14. image_assets (job_id로 연결된 것만, planner_proposals 삭제 후)
         ("image_assets", "DELETE FROM image_assets WHERE job_id = %s AND job_id IS NOT NULL"),
         
-        # 13. jobs (마지막으로 삭제)
+        # 15. jobs (마지막으로 삭제)
         ("jobs", "DELETE FROM jobs WHERE job_id = %s"),
     ]
     
