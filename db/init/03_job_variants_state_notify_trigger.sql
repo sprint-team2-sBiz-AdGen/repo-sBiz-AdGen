@@ -19,13 +19,28 @@
 -- 트리거 함수: jobs_variants 테이블 변경 시 NOTIFY 발행
 CREATE OR REPLACE FUNCTION notify_job_variant_state_change()
 RETURNS TRIGGER AS $$
+DECLARE
+    should_notify BOOLEAN := FALSE;
+    notify_reason TEXT;
 BEGIN
     -- current_step, status, 또는 updated_at이 변경된 경우 NOTIFY 발행
     -- updated_at 변경도 감지하여 INSERT 후 UPDATE 시 트리거 발동
-    IF (OLD.current_step IS DISTINCT FROM NEW.current_step 
-        OR OLD.status IS DISTINCT FROM NEW.status
-        OR OLD.updated_at IS DISTINCT FROM NEW.updated_at) THEN
-        
+    IF OLD.current_step IS DISTINCT FROM NEW.current_step THEN
+        should_notify := TRUE;
+        notify_reason := 'current_step changed';
+    ELSIF OLD.status IS DISTINCT FROM NEW.status THEN
+        should_notify := TRUE;
+        notify_reason := 'status changed';
+    ELSIF OLD.updated_at IS DISTINCT FROM NEW.updated_at THEN
+        should_notify := TRUE;
+        notify_reason := 'updated_at changed';
+    END IF;
+    
+    -- 디버깅 로깅
+    RAISE NOTICE '[NOTIFY_TRIGGER] variant_id=%, job_id=%, reason=%, old_updated_at=%, new_updated_at=%', 
+        NEW.job_variants_id, NEW.job_id, notify_reason, OLD.updated_at, NEW.updated_at;
+    
+    IF should_notify THEN
         PERFORM pg_notify(
             'job_variant_state_changed',
             json_build_object(
@@ -38,6 +53,9 @@ BEGIN
                 'updated_at', NEW.updated_at
             )::text
         );
+        RAISE NOTICE '[NOTIFY_TRIGGER] ✅ NOTIFY 발행 완료: variant_id=%', NEW.job_variants_id;
+    ELSE
+        RAISE NOTICE '[NOTIFY_TRIGGER] ⚠️ NOTIFY 발행 안 함: 변경사항 없음';
     END IF;
     
     RETURN NEW;
