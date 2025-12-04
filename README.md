@@ -35,10 +35,10 @@ FeedlyAI는 다음과 같은 기능을 제공합니다:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    NGINX (Reverse Proxy)                 │
-│                    Port: 8080                            │
-│  /api/ye/ → app-ye  /api/yh/ → app-yh                  │
-│  /api/js/ → app-js                 │
+│                    NGINX (Reverse Proxy)                │
+│                    Port: 8080                           │
+│  /api/ye/ → app-ye  /api/yh/ → app-yh                   │
+│  /api/js/ → app-js                                      │
 │  /assets/ → Static Files                                │
 └─────────────────────────────────────────────────────────┘
          │              │              │            
