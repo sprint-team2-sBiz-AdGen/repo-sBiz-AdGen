@@ -279,9 +279,13 @@ python3 db/delete_job.py 79a0375c-1d54-4043-b71a-07eb42fffbfc --force
 
 
 ## 보고서
-https://drive.google.com/file/d/1lBN6lOK2-LNqV8nM9G1P9fP1Y2YncOWI/
-## 노션 협업일지
-https://www.notion.so/Codeit-AI-3-_-2-_-2a255af55ff680af835dde638729cb2d
+https://drive.google.com/file/d/1lBN6lOK2-LNqV8nM9G1P9fP1Y2YncOWI
+
+## 📑 노션 협업일지
+팀 : https://www.notion.so/Codeit-AI-3-_-2-_-2a255af55ff680af835dde638729cb2d
+유영은 : https://www.notion.so/Part4_2-_-Daily_-2a25954c5686809fbd40fa0ed83efdce
+이영호 : https://www.notion.so/Codeit-AI-3-_-Part4_2-_-_-Daily_-2a255af55ff68048830fce21c4e7e8c7
+이종서 : https://www.notion.so/2a264dd7ce72803abf1ac3d1d27942b7?v=2a264dd7ce7281de9f83000c117b0343
 
 ---
 
